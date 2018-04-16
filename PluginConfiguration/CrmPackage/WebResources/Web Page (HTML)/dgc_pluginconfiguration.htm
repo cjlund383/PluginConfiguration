@@ -1,0 +1,284 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Plug-in Configutation Page</title>
+    <!-- STYLES -->
+    <style>
+        body  {
+            word-wrap: break-word;
+            font-family: Segoe UI, Tahoma, Arial;
+        }
+        h1{
+            font-size: 27px;
+            font-weight: lighter;
+            display: inline-block;
+            line-height: 28px;
+        }
+        h2 {
+            display: inline-block;
+            font-size: 20px;
+            font-weight: lighter;
+        }
+        form {}
+        table {
+            font-size: 12px;
+        }
+        thead {
+            border: 1px solid lightgray;
+            text-align:left;
+        }
+        th {
+            background-color:whitesmoke;
+        }
+        tr {
+
+        }
+        td {
+
+        }
+        tfoot {
+
+        }
+        input, select{
+            width:100%;
+            border: 1px solid lightgray;
+            font-size:12px;
+
+        }
+        button {
+            border: 0 solid lightgray;
+
+        }
+
+        footer {
+            position: absolute;
+            bottom: 0;
+            height: 35px;
+            margin: 0 auto;
+            font-size: 9px;
+        }
+    </style>
+    <!-- SCRIPTS -->
+    <script src="../ClientGlobalContext.js.aspx" type="text/javascript"></script>
+    <script>
+        //SDK START
+        "use strict";
+        var SDK = window.SDK || {};
+
+        SDK.getClinetUrl = function () {
+            console.log('Get Client URL');
+            var _context;
+            if (typeof getGlobalContext !== "undefined") {
+                console.log('Global Context is avaliable');
+                _context = getGlobalContext();
+            } else {
+                if (typeof Xrm !== "undefined") {
+                    console.log('Xrm Context is avaliable');
+                    _context = Xrm.Page.context;
+                } else {
+                    console.log('Context is not avaliable');
+                    throw new Error("Context is not avaliable");
+                }
+            }
+            return _context.getClinetUrl();
+        };
+        SDK.versionManager = new function () {
+            _webAPIMajorVersion = 8;
+            _webAPIMinorVersion = 0;
+            Object.defineProperties(this, {
+                "WebAPIMajorVersion": {
+                    get: function () {
+                        return _webAPIMajorVersion;
+                    },
+                    set: function (value) {
+                        if (typeof value != "number") {
+                            throw new Error("SDK.versionManager.WebAPIMajorVersion property must be a number.")
+                        }
+                        _webAPIMajorVersion = parseInt(value, 10);
+                    }
+                },
+                "WebAPIMinorVersion": {
+                    get: function () {
+                        return _webAPIMinorVersion;
+                    },
+                    set: function (value) {
+                        if (isNaN(value)) {
+                            throw new Error("SDK.versionManager._webAPIMinorVersion property must be a number.")
+                        }
+                        _webAPIMinorVersion = parseInt(value, 10);
+                    }
+                },
+                "WebAPIPath": {
+                    get: function () {
+                        return "/api/data/v" + _webAPIMajorVersion + "." + _webAPIMinorVersion;
+                    }
+                }
+            })
+        };
+        SDK.request = function (action, uri, data) {
+            if (!RegExp(action, "g").test("POST PATCH PUT GET DELETE")) {
+                console.log("SDK.request: action parameter must be one of the following: POST, PATCH, PUT, GET, DELETE.");
+                throw new Error("SDK.request: action parameter must be one of the following: POST, PATCH, PUT, GET, DELETE.");
+
+            }
+            if (!typeof uri === "string") {
+                console.log("SDK.request: uri parameter must be a string.");
+                throw new Error("SDK.request: uri parameter must be a string.");
+            }
+            if ((RegExp(action, "g").test("POST PATCH PUT")) && (data === null || data === undefined)) {
+                console.log("SDK.request: data parameter must not be null for operations that create or modify data.");
+                throw new Error("SDK.request: data parameter must not be null for operations that create or modify data.");
+            }
+            if (uri.charAt(0) === "/") {
+                uri = clientUrl + webAPIPath + uri;
+            }
+            return new Promise(function (resolve, reject) {
+                var _request = new XMLHttpRequest();
+                _request.open(action, encodeURI(uri), true);
+                _request.setRequestHeader("OData-MaxVersion", "4.0");
+                _request.setRequestHeader("OData-Version", "4.0");
+                _request.setRequestHeader("Accept", "application/json");
+                _request.setRequestHeader("Content-Type", "application/json; charset=utf-8");
+                _request.onreadystatechange = function () {
+                    if (this.readyState === 4) {
+                        _request.onreadystatechange = null;
+                        switch (this.status) {
+                            case 200: console.log("Success with content returned");
+                            case 201: console.log("Success");
+                            case 204: console.log("Success with no content returned");
+                                resolve(this);
+                                break;
+                            default: console.log("All other statuses are errors.");
+                                var error;
+                                try {
+                                    console.log("Parse responce error.");
+                                    error = JSON.parse(_request.response).error;
+                                } catch (e) {
+                                    console.log("Unexpected error.");
+                                    error = new Error("Unexpected Error.");
+                                }
+                                reject(error);
+                                break;
+                        }
+                    }
+
+                };
+                _request.send(JSON.stringify(data));
+            });
+        };
+        SDK.retrieveVersion = function () {
+            return new Promise(function (resolve, reject) {
+                SDK.request("GET", "/RetrieveVersion").then(function (request) {
+                    try {
+                        var versionresponce = JSON.parse(request.response);
+                        var fullVersion = versionresponce.Version;
+                        var versionData = fullVersion.split(".");
+                        SDK.versionManager.WebAPIMajorVersion = parseInt(versionData[0], 10);
+                        SDK.versionManager.WebAPIMinorVersion = parseInt(versionData[1], 10);
+                        resolve();
+                    } catch (e) {
+                        reject(new Error("Error processing version: " + e.message))
+                    }
+                }).catch(function (e) {
+                    reject(new Error("Error retrieving version: " + e.message))
+                })
+            });
+        };
+        SDK.createAsync = function () {
+            return new Promise(function (resolve, reject) {
+                console.log("--Create Async Started--");
+                var setting = {};
+                setting.name = "User";
+                setting.value = "password";
+                var entitySetName = "/dgc_setting";
+
+                SDK.request("POST", entitySetName, setting)
+                .then(function (request) {
+                    var settingUri = request.getResponceHeader("OData-EntityId");
+
+                })
+            })
+        };
+        //SDK END
+        function loadSettings() {
+            console.log('Load Settings');
+            var _url = SDK.getClinetUrl();
+            console.log("Context URL: " + _url);
+        }
+        function subnitsettings() {
+            console.log('Submit Settings');
+        }
+
+    </script>
+</head>
+<body onload="loadSettings()">
+﻿    <h1>Plug-In Configuration</h1>
+    <form action="/" method="post">
+        <table id="ConfigurationTable">
+            <thead>
+                <tr>
+                    <th width="20%;">Name</th>
+                    <th width="80%;">Value</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><input readonly 
+                               type="text"     
+                               name="name"  
+                               value="Service User" /></td>
+                    <td><input type="text"     
+                               name="value"        
+                               value=""/></td>
+                </tr>
+                <tr>
+                    <td><input readonly 
+                               type="text"     
+                               name="name"  
+                               value="Service Password" /></td>
+                    <td><input type="password" 
+                               name="value"        
+                               value="" /></td>
+                </tr>
+                <tr>
+                    <td><input readonly 
+                               type="text"     
+                               name="name"  
+                               value="Service End-Point" /></td>
+                    <td><input type="password" 
+                               name="value"        
+                               value="" /></td>
+                </tr>
+            </tbody>
+            <tfoot>
+                <tr>
+                    <td><input type="hidden" 
+                               name="" 
+                               value="" /></td>
+                    <td><input type="hidden" 
+                               name="" 
+                               value="" /></td>
+                    <td><input type="hidden" 
+                               name="" 
+                               value="" /></td>
+                    <td><input type="button" 
+                               name="submitbutton" 
+                               value="Submit" 
+                               onclick="subnitsettings()" /></td>
+                </tr>
+            </tfoot>
+        </table>
+    </form>
+    <footer>
+        <a href="http://creativecommons.org/licenses/by/4.0/" rel="license">
+        <img style="border-width:0" 
+             alt="Creative Commons License" 
+             src="https://i.creativecommons.org/l/by/4.0/80x15.png"></a>
+        <strong> Dragon Generations Consulting LLC</strong>
+        <br>This work is licensed under a 
+        <a href="http://creativecommons.org/licenses/by/4.0/" 
+           rel="license">Creative Commons Attribution 4.0 International License</a>.
+    </footer>
+</body>
+</html>
